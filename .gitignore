@@ -1,0 +1,21 @@
+# Local env file with secrets — never commit
+scripts/env.sh
+
+# Build artifacts
+.last-build
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tmp
+/tmp/
+*.swp
