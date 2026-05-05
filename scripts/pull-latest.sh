@@ -15,6 +15,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/.." && pwd)"
+# shellcheck source=/dev/null
 source "$HERE/env.sh"
 
 : "${ACR_NAME:?ACR_NAME not set}"
