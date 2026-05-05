@@ -1,0 +1,95 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location":  { "type": "string" },
+    "startName": { "type": "string" },
+    "stopName":  { "type": "string" },
+    "startUri":  { "type": "string" },
+    "stopUri":   { "type": "string" }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('startName')]",
+      "location": "[parameters('location')]",
+      "identity": { "type": "SystemAssigned" },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Day",
+                "interval": 1,
+                "timeZone": "Pacific Standard Time",
+                "schedule": { "hours": [ "18" ], "minutes": [ 0 ] }
+              }
+            }
+          },
+          "actions": {
+            "Start_ACI": {
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "[parameters('startUri')]",
+                "headers": { "Content-Length": "0" },
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://management.azure.com/"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('stopName')]",
+      "location": "[parameters('location')]",
+      "identity": { "type": "SystemAssigned" },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Day",
+                "interval": 1,
+                "timeZone": "Pacific Standard Time",
+                "schedule": { "hours": [ "1" ], "minutes": [ 0 ] }
+              }
+            }
+          },
+          "actions": {
+            "Stop_ACI": {
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "[parameters('stopUri')]",
+                "headers": { "Content-Length": "0" },
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://management.azure.com/"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "startPrincipalId": { "type": "string", "value": "[reference(parameters('startName'), '2019-05-01', 'full').identity.principalId]" },
+    "stopPrincipalId":  { "type": "string", "value": "[reference(parameters('stopName'),  '2019-05-01', 'full').identity.principalId]" }
+  }
+}
