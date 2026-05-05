@@ -7,6 +7,11 @@
 
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+if [ ! -f "$HERE/env.sh" ]; then
+  echo "ERROR: scripts/env.sh not found." >&2
+  echo "Copy scripts/env.sh.example to scripts/env.sh and fill in the values." >&2
+  exit 1
+fi
 # shellcheck source=/dev/null
 source "$HERE/env.sh"
 

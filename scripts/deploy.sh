@@ -18,6 +18,11 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/.." && pwd)"
+if [ ! -f "$HERE/env.sh" ]; then
+  echo "ERROR: scripts/env.sh not found." >&2
+  echo "Copy scripts/env.sh.example to scripts/env.sh, fill in the values, and re-run." >&2
+  exit 1
+fi
 # shellcheck source=/dev/null
 source "$HERE/env.sh"
 
@@ -51,8 +56,15 @@ fi
 
 # --- 2. Resolve image tag from .last-build ---
 LAST_BUILD_FILE="$REPO_ROOT/.last-build"
-[ -f "$LAST_BUILD_FILE" ] || { echo "ERROR: $LAST_BUILD_FILE missing — run scripts/build-image.sh first" >&2; exit 1; }
-CUSTOM_TAG="$(cat "$LAST_BUILD_FILE")"
+if [ -f "$LAST_BUILD_FILE" ]; then
+  CUSTOM_TAG="$(cat "$LAST_BUILD_FILE")"
+elif [ "$DRY_RUN" = "1" ]; then
+  CUSTOM_TAG="dry-run-tag"
+  echo "WARN: $LAST_BUILD_FILE missing — using placeholder tag for dry-run" >&2
+else
+  echo "ERROR: $LAST_BUILD_FILE missing — run scripts/build-image.sh first" >&2
+  exit 1
+fi
 IMAGE="${ACR_NAME}.azurecr.io/openclaw:${CUSTOM_TAG}"
 
 # --- 3. Render config from template via envsubst + jq validation ---

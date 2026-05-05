@@ -1,0 +1,51 @@
+name: lint
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck on scripts/
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y shellcheck
+          shellcheck scripts/*.sh
+
+  config-render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install jq + envsubst
+        run: sudo apt-get install -y jq gettext-base
+      - name: Render config.template.json with dummy env
+        run: |
+          set -euo pipefail
+          export TELEGRAM_OWNER_ID="123"
+          export AOAI_BASE_URL="https://example.openai.azure.com/openai/v1"
+          export WORKSPACE_MOUNT="/work"
+          export STORAGE_ACCOUNT="dummystg"
+          export AZURE_STORAGE_KEY="dummykey"
+          export AZURE_OPENAI_API_KEY="dummy"
+          export BRAVE_SEARCH_API="dummy"
+          export NVIDIA_API_KEY="dummy"
+          envsubst < config/config.template.json | jq . > /tmp/rendered.json
+          # Fail if any unsubstituted ${VAR} survives
+          if grep -q '\${[A-Z_]\+}' /tmp/rendered.json; then
+            echo "Unsubstituted placeholders remain:"
+            grep -n '\${[A-Z_]\+}' /tmp/rendered.json
+            exit 1
+          fi
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
