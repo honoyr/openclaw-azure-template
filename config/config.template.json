@@ -1,0 +1,140 @@
+{
+  "gateway": {
+    "bind": "lan",
+    "auth": {
+      "mode": "token"
+    },
+    "trustedProxies": ["127.0.0.1", "::1"],
+    "controlUi": {
+      "allowInsecureAuth": true,
+      "dangerouslyDisableDeviceAuth": true,
+      "allowedOrigins": ["*"]
+    }
+  },
+  "acp": {
+    "allowedAgents": ["gemini"]
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "allowlist",
+      "allowFrom": ["${TELEGRAM_OWNER_ID}"],
+      "groups": {}
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "microsoft-foundry/model-router-1",
+        "fallbacks": [
+          "microsoft-foundry/Kimi-K2.6-1",
+          "nvidia/z-ai/glm4.7",
+          "nvidia/mistralai/mistral-large-3-675b-instruct-2512"
+        ]
+      },
+      "workspace": "${WORKSPACE_MOUNT}"
+    },
+    "list": [
+      { "id": "main", "default": true },
+      { "id": "gemini" }
+    ]
+  },
+  "models": {
+    "providers": {
+      "microsoft-foundry": {
+        "baseUrl": "${AOAI_BASE_URL}",
+        "api": "azure-openai-responses",
+        "models": [
+          {"id": "Kimi-K2.6-1", "name": "Kimi K2.6"},
+          {"id": "model-router-1", "name": "Model Router"}
+        ]
+      },
+      "nvidia": {
+        "baseUrl": "https://integrate.api.nvidia.com/v1",
+        "api": "openai-completions",
+        "models": [
+          {"id": "mistralai/mistral-large-3-675b-instruct-2512", "name": "Mistral Large 3 (675B)"},
+          {"id": "z-ai/glm4.7", "name": "GLM 4.7"},
+          {"id": "stepfun-ai/step-3.5-flash", "name": "Step 3.5 Flash"}
+        ]
+      }
+    }
+  },
+  "tools": {
+    "web": {
+      "search": {
+        "provider": "brave",
+        "maxResults": 5,
+        "timeoutSeconds": 30
+      }
+    }
+  },
+  "plugins": {
+    "slots": {
+      "memory": "memory-lancedb"
+    },
+    "entries": {
+      "brave": {
+        "enabled": true,
+        "config": {
+          "webSearch": {
+            "apiKey": "${BRAVE_SEARCH_API}"
+          }
+        }
+      },
+      "memory-lancedb": {
+        "enabled": true,
+        "config": {
+          "embedding": {
+            "apiKey": "${AZURE_OPENAI_API_KEY}",
+            "baseUrl": "${AOAI_BASE_URL}",
+            "model": "text-embedding-3-small-1",
+            "dimensions": 1536
+          },
+          "dbPath": "az://openclaw-memory/lancedb",
+          "storageOptions": {
+            "account_name": "${STORAGE_ACCOUNT}",
+            "account_key": "${AZURE_STORAGE_KEY}"
+          },
+          "autoCapture": true,
+          "autoRecall": true
+        }
+      },
+      "memory-wiki": {
+        "enabled": true,
+        "config": {
+          "vaultMode": "bridge",
+          "vault": {
+            "path": "${WORKSPACE_MOUNT}/wiki/main",
+            "renderMode": "native"
+          },
+          "bridge": {
+            "enabled": true,
+            "readMemoryArtifacts": true,
+            "indexDreamReports": true,
+            "indexDailyNotes": true,
+            "indexMemoryRoot": true,
+            "followMemoryEvents": true
+          },
+          "ingest": {
+            "autoCompile": true,
+            "maxConcurrentJobs": 1,
+            "allowUrlIngest": true
+          },
+          "search": {
+            "backend": "shared",
+            "corpus": "all"
+          },
+          "context": {
+            "includeCompiledDigestPrompt": false
+          },
+          "render": {
+            "preserveHumanBlocks": true,
+            "createBacklinks": true,
+            "createDashboards": true
+          }
+        }
+      }
+    }
+  }
+}
