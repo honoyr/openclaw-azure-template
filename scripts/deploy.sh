@@ -12,6 +12,17 @@
 #
 # Flags:
 #   --dry-run       Stop before az container create; print what would run.
+#   --smoke=prod    Default. After the deploy reaches Running + gateway-ready,
+#                   run scripts/smoke-prod.sh against the live container. On
+#                   failure, prints a loud warning and exits non-zero.
+#                   These health checks codify every regression debugged in
+#                   production (codex harness missing, perms 777, model
+#                   warmup failed, surface_error format, etc.) — running them
+#                   on every deploy is the cheapest way to catch regressions
+#                   before they show up as silent typing-with-no-reply in
+#                   Telegram. See docs/discoveries/2026-05-09-codex-harness-missing.md
+#   --no-smoke      Skip the post-deploy smoke (e.g. when the gateway is
+#                   intentionally degraded — see docs/runbook.md).
 # Env:
 #   DEPLOY_DRY_RUN=1   Same as --dry-run.
 
@@ -27,9 +38,20 @@ fi
 source "$HERE/env.sh"
 
 DRY_RUN=0
+SMOKE_TIER="prod"
 for arg in "$@"; do
   case "$arg" in
-    --dry-run) DRY_RUN=1 ;;
+    --dry-run)        DRY_RUN=1 ;;
+    --smoke=prod)     SMOKE_TIER="prod" ;;
+    --no-smoke)       SMOKE_TIER="" ;;
+    --smoke=local|--smoke=staging|--smoke=all)
+      echo "deploy.sh: ${arg} not yet wired (only --smoke=prod is supported here)." >&2
+      exit 2
+      ;;
+    --smoke=*)
+      echo "deploy.sh: unknown smoke tier '${arg}'. Supported: --smoke=prod, --no-smoke" >&2
+      exit 2
+      ;;
     *) echo "Unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
@@ -205,4 +227,19 @@ if [ -n "$TOKEN" ]; then
   echo "Gateway Token: $TOKEN"
 else
   echo "WARN: could not extract Gateway Token; fetch manually with az container exec."
+fi
+
+# --- 7. Post-deploy smoke (Tier 3) ---
+if [ -n "$SMOKE_TIER" ]; then
+  echo
+  echo "==> Running Tier 3 post-deploy smoke (scripts/smoke-prod.sh)"
+  if bash "$HERE/smoke-prod.sh"; then
+    echo "==> Tier 3 smoke green"
+  else
+    rc=$?
+    echo "==> ⚠️  Tier 3 smoke reported failures (exit $rc)."
+    echo "    The container is deployed but health checks are red. See output above"
+    echo "    and docs/runbook.md for diagnosis steps. Re-run with --no-smoke to skip."
+    exit "$rc"
+  fi
 fi
