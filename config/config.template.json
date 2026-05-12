@@ -4,39 +4,49 @@
     "auth": {
       "mode": "token"
     },
-    "trustedProxies": ["127.0.0.1", "::1"],
+    "trustedProxies": [
+      "127.0.0.1",
+      "::1"
+    ],
     "controlUi": {
       "allowInsecureAuth": true,
       "dangerouslyDisableDeviceAuth": true,
-      "allowedOrigins": ["*"]
+      "allowedOrigins": [
+        "*"
+      ]
     }
   },
   "acp": {
-    "allowedAgents": ["gemini"]
+    "allowedAgents": [
+      "gemini"
+    ]
   },
   "channels": {
     "telegram": {
       "enabled": true,
       "dmPolicy": "allowlist",
-      "allowFrom": ["${TELEGRAM_OWNER_ID}"],
+      "allowFrom": [
+        "${TELEGRAM_OWNER_ID}"
+      ],
       "groups": {}
     }
   },
   "agents": {
     "defaults": {
       "model": {
-        "primary": "microsoft-foundry/model-router-1",
-        "fallbacks": [
-          "microsoft-foundry/Kimi-K2.6-1",
-          "nvidia/z-ai/glm4.7",
-          "nvidia/mistralai/mistral-large-3-675b-instruct-2512"
-        ]
+        "primary": "openai/gpt-5.5",
+        "fallbacks": []
       },
       "workspace": "${WORKSPACE_MOUNT}"
     },
     "list": [
-      { "id": "main", "default": true },
-      { "id": "gemini" }
+      {
+        "id": "main",
+        "default": true
+      },
+      {
+        "id": "gemini"
+      }
     ]
   },
   "models": {
@@ -45,17 +55,32 @@
         "baseUrl": "${AOAI_BASE_URL}",
         "api": "azure-openai-responses",
         "models": [
-          {"id": "Kimi-K2.6-1", "name": "Kimi K2.6"},
-          {"id": "model-router-1", "name": "Model Router"}
+          {
+            "id": "Kimi-K2.6-1",
+            "name": "Kimi K2.6"
+          },
+          {
+            "id": "model-router-1",
+            "name": "Model Router"
+          }
         ]
       },
       "nvidia": {
         "baseUrl": "https://integrate.api.nvidia.com/v1",
         "api": "openai-completions",
         "models": [
-          {"id": "mistralai/mistral-large-3-675b-instruct-2512", "name": "Mistral Large 3 (675B)"},
-          {"id": "z-ai/glm4.7", "name": "GLM 4.7"},
-          {"id": "stepfun-ai/step-3.5-flash", "name": "Step 3.5 Flash"}
+          {
+            "id": "mistralai/mistral-large-3-675b-instruct-2512",
+            "name": "Mistral Large 3 (675B)"
+          },
+          {
+            "id": "z-ai/glm4.7",
+            "name": "GLM 4.7"
+          },
+          {
+            "id": "stepfun-ai/step-3.5-flash",
+            "name": "Step 3.5 Flash"
+          }
         ]
       }
     }
@@ -74,6 +99,12 @@
       "memory": "memory-lancedb"
     },
     "entries": {
+      "codex": {
+        "enabled": true
+      },
+      "openai": {
+        "enabled": true
+      },
       "brave": {
         "enabled": true,
         "config": {

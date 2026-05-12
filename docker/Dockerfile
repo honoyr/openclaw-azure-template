@@ -21,6 +21,28 @@ RUN apt-get update \
 # Files share so OAuth survives redeploys.
 RUN npm install -g @google/gemini-cli@latest
 
+# 2026.5.3+ unbundled `brave` and `memory-lancedb`. Reinstall both from
+# ClawHub during build so the wrapper image ships them in
+# /home/node/.openclaw/extensions/. Run as `node` because that's the user
+# that owns ~/.openclaw at runtime.
+# See docs/discoveries/2026-05-06-local-54-upgrade-probe.md
+#
+# Codex is shipped as `@openclaw/codex` (npm spec, not clawhub). It provides
+# the Codex app-server harness required for openai/gpt-* embedded agent runs
+# (Telegram + Web UI). Without it, every embedded turn fails with
+# "Requested agent harness 'codex' is not registered".
+# See docs/discoveries/2026-05-09-codex-harness-missing.md
+#
+# These three are baked in because SMB-mounted Azure Files cannot persist
+# node_modules (no symlink support, and native modules need to match the
+# Node ABI in the image).
+USER node
+RUN cd /app && node openclaw.mjs plugins install clawhub:@openclaw/brave-plugin \
+ && cd /app && node openclaw.mjs plugins install clawhub:@openclaw/memory-lancedb \
+ && cd /app && node openclaw.mjs plugins install @openclaw/codex
+USER root
+WORKDIR /app
+
 COPY openclaw-init.sh /usr/local/bin/openclaw-init.sh
 RUN chmod +x /usr/local/bin/openclaw-init.sh
 

@@ -1,0 +1,126 @@
+# Nightly Tier 3 prod smoke (drift detection)
+#
+# Runs scripts/smoke-prod.sh against the live prod ACI once a day at 09:00 UTC
+# (02:00 PT — off-peak), and on manual workflow_dispatch. On failure, opens
+# (or relies on the user to update) a GitHub issue labeled `smoke-fail`.
+#
+# Required GitHub repo secrets:
+#
+#   Azure auth — pick ONE of the two paths:
+#     A) OIDC (preferred, no long-lived secret):
+#          AZURE_CLIENT_ID         — service principal app-id (federated to repo)
+#          AZURE_TENANT_ID         — Azure AD tenant id
+#          AZURE_SUBSCRIPTION_ID   — target subscription id
+#        Federated credential setup:
+#          az ad app federated-credential create --id <sp-app-id> --parameters \
+#            '{"name":"openclaw-deploy-nightly","issuer":"https://token.actions.githubusercontent.com",
+#              "subject":"repo:<owner>/<repo>:ref:refs/heads/main","audiences":["api://AzureADTokenExchange"]}'
+#     B) Client-secret JSON (legacy, simpler to set up first time):
+#          AZURE_CREDENTIALS       — `az ad sp create-for-rbac --sdk-auth` output
+#                                    (JSON blob with clientId/clientSecret/tenantId/subscriptionId)
+#
+#   Smoke target (always required):
+#     SMOKE_RG                    — resource group of the prod ACI (e.g. myCentralRG)
+#     SMOKE_SUBSCRIPTION          — subscription id (matches AZURE_SUBSCRIPTION_ID for OIDC path)
+#     SMOKE_CONTAINER             — ACI container name (e.g. openclaw-container-myname)
+#     SMOKE_DNS_LABEL             — ACI DNS label (e.g. openclaw)
+#     SMOKE_LOCATION              — ACI region (e.g. eastus)
+#     SMOKE_CF_TUNNEL_HOST        — Cloudflare tunnel hostname (e.g. openclaw.example.com)
+#                                   Optional — probe #16 will skip cleanly if unset.
+
+name: smoke-prod-nightly
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  id-token: write    # required for azure/login OIDC
+  contents: read
+  issues: write      # for the failure-issue step
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      # Mirror secrets into env so step-level `if:` can read them.
+      # GH Actions disallows `secrets.*` in step-if expressions.
+      HAS_OIDC: ${{ secrets.AZURE_CLIENT_ID != '' && 'yes' || 'no' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq jq
+          fi
+          jq --version
+
+      # OIDC path (preferred). Skipped automatically if AZURE_CLIENT_ID is empty.
+      - name: Azure login (OIDC)
+        if: env.HAS_OIDC == 'yes'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Client-secret fallback (only if OIDC isn't configured).
+      - name: Azure login (client-secret JSON)
+        if: env.HAS_OIDC == 'no'
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Write minimal scripts/env.sh from secrets
+        env:
+          SMOKE_RG: ${{ secrets.SMOKE_RG }}
+          SMOKE_SUBSCRIPTION: ${{ secrets.SMOKE_SUBSCRIPTION }}
+          SMOKE_CONTAINER: ${{ secrets.SMOKE_CONTAINER }}
+          SMOKE_DNS_LABEL: ${{ secrets.SMOKE_DNS_LABEL }}
+          SMOKE_LOCATION: ${{ secrets.SMOKE_LOCATION }}
+          SMOKE_CF_TUNNEL_HOST: ${{ secrets.SMOKE_CF_TUNNEL_HOST }}
+        run: |
+          set -euo pipefail
+          : "${SMOKE_RG:?SMOKE_RG secret not set}"
+          : "${SMOKE_SUBSCRIPTION:?SMOKE_SUBSCRIPTION secret not set}"
+          : "${SMOKE_CONTAINER:?SMOKE_CONTAINER secret not set}"
+          : "${SMOKE_DNS_LABEL:?SMOKE_DNS_LABEL secret not set}"
+          : "${SMOKE_LOCATION:?SMOKE_LOCATION secret not set}"
+          cat > scripts/env.sh <<EOF
+          export RG="${SMOKE_RG}"
+          export SUBSCRIPTION="${SMOKE_SUBSCRIPTION}"
+          export CONTAINER="${SMOKE_CONTAINER}"
+          export DNS_LABEL="${SMOKE_DNS_LABEL}"
+          export LOCATION="${SMOKE_LOCATION}"
+          export CF_TUNNEL_HOST="${SMOKE_CF_TUNNEL_HOST:-}"
+          EOF
+          chmod 600 scripts/env.sh
+
+      - name: Run Tier 3 smoke
+        id: smoke
+        run: |
+          set -o pipefail
+          mkdir -p smoke-out
+          bash scripts/smoke-prod.sh 2>&1 | tee smoke-out/smoke-prod-${{ github.run_id }}.tap
+          # The TAP run prints one JSON summary line; extract it for the artifact.
+          grep -E '^\{"tier"' smoke-out/smoke-prod-${{ github.run_id }}.tap \
+            > smoke-out/smoke-prod-${{ github.run_id }}.json || true
+
+      - name: Upload smoke output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-prod-${{ github.run_id }}
+          path: smoke-out/
+
+      - name: Open / refresh failure issue
+        if: failure()
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "Prod smoke drift detected — ${{ github.run_id }}"
+          content-filepath: smoke-out/smoke-prod-${{ github.run_id }}.tap
+          labels: smoke-fail
